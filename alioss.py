@@ -20,7 +20,8 @@ class AliOSS2:
                  bucket_name="bucket_name",
                  file_log="running.log",
                  connect_timeout=30,
-                 database_name="records.db") -> None:
+                 database_name="records.db",
+                 debug_mode=False) -> None:
         assert len(str(ID)) != 0, "Your Login ID Can Not Be Empty!"
         assert len(str(Passwd)) != 0, "Your Login Password Can Not Be Empty!"
 
@@ -32,9 +33,11 @@ class AliOSS2:
         self.database_name = database_name
         self.last_modify_time = str()
         set_file_logger(file_log, "oss2", INFO)
-        set_stream_logger()
-        self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
-                             connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
+        if debug_mode:
+            set_stream_logger()
+        else:
+            self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
+                                connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
         self.__init_database()
 
     def __init_database(self) -> bool:
@@ -196,6 +199,6 @@ class AliOSS2:
 
 
 if __name__ == "__main__":
-    alioss2 = AliOSS2("s", "s")  # TODO input your ID and Key
+    alioss2 = AliOSS2("s", "s", debug_mode=True)  # TODO input your ID and Key
     alioss2.run("/home/rane/project/python/alioss", "/",
                 "test.db")  # TODO change to your folder
