@@ -1,9 +1,9 @@
 from sqlite3 import connect, OperationalError
 from oss2 import Auth, Bucket, set_file_logger, set_stream_logger, logger
 from logging import INFO
-from os.path import join, isfile, getmtime
+from os.path import join, isfile, getmtime, exists
 from os import listdir
-from time import sleep, time
+from time import sleep, time, localtime, asctime
 from random import randint
 import uuid
 from traceback import print_exc
@@ -26,8 +26,8 @@ class AliOSS2:
         self.last_modify_time = str()
         set_file_logger(file_log, "oss2", INFO)
         set_stream_logger()
-        # self.bucket = Bucket(Auth(ID, Passwd), end_point,
-        #                      connect_timeout=connect_timeout, bucket_name=bucket_name)
+        self.bucket = Bucket(Auth(ID, Passwd), end_point,
+                             connect_timeout=connect_timeout, bucket_name=bucket_name)
         self.__init_database()
 
     def __init_database(self) -> bool:
@@ -73,7 +73,7 @@ class AliOSS2:
             exit()
         return True
 
-    def __update_file(self, local_path, web_path):
+    def __update_file(self, local_path, web_path) -> None:
         file_list = listdir(local_path)
         for file in file_list:
             file_path = join(local_path, file)
@@ -81,7 +81,8 @@ class AliOSS2:
             if isfile(file_path):
                 logger.debug("file path is: %30s \n\t\t\t\t\t\t       web saving path is: %5s" % (
                     file_path, web_saving_path))
-                sql_script = "select modified_time from update_records where name='" + file + "' and local_path='" + file_path + "';"
+                sql_script = "select modified_time from update_records where name='" + \
+                    file + "' and local_path='" + file_path + "';"
                 logger.debug(sql_script)
                 modify_time = getmtime(file_path)
                 try:
@@ -122,10 +123,33 @@ class AliOSS2:
             else:
                 self.__update_file(file_path, web_saving_path)
 
-    def __handle_file(self):
-        sql_script = "select "
+    def __handle_file(self) -> bool:
+        with open("file_delete.log", "a+") as f:
+            sql_script = "select * from update_records where update_flag!='" + \
+                self.change_flag + "';"
+            logger.debug(sql_script)
+            query_result_list = self.cursor.execute(sql_script).fetchall()
+            if len(query_result_list).__eq__(0):
+                return True
+            for file_list in query_result_list:
+                file_name = file_list[1]
+                local_path = file_list[2]
+                date = asctime(localtime(time()))
+                if not exists(local_path):
+                    sql_script = "update update_records set deleted_flag=1 where name='" + \
+                        file_name + "' and local_path='" + local_path + "';"
+                    logger.debug(sql_script)
+                    self.cursor.execute(sql_script)
+                    log_string = "file_deleted: <%5s> has been deleted!\n" % file_name
+                    logger.warn(log_string)
+                    log_string = date + ">>>" + log_string
+                    f.write(log_string)
+                    # TODO move delete file
+                else:
+                    # TODO reupload file
+                    pass
 
-    def run(self, local_path, web_root_path, database_file_path):
+    def run(self, local_path, web_root_path, database_file_path) -> None:
         if not isfile(database_file_path) and not database_file_path.endswith("db"):
             logger.error(
                 "input database file do not exist or this file is not a database file")
@@ -149,5 +173,6 @@ class AliOSS2:
 
 
 if __name__ == "__main__":
-    alioss2 = AliOSS2("s", "s")
-    alioss2.run("/home/rane/project/python/alioss", "/", "test.db")
+    alioss2 = AliOSS2("s", "s")  # TODO input your ID and Key
+    alioss2.run("/home/rane/project/python/alioss", "/",
+                "test.db")  # TODO change to your folder

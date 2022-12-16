@@ -1,4 +1,5 @@
-key
-test.db
-records.db
-running.log
+key*
+*.db
+*.log
+*.sql
+.vscode/
