@@ -8,6 +8,8 @@ from random import randint
 import uuid
 from traceback import print_exc
 
+MAX_RETRIES = 3
+
 
 class AliOSS2:
     def __init__(self,
@@ -22,12 +24,17 @@ class AliOSS2:
         assert len(str(ID)) != 0, "Your Login ID Can Not Be Empty!"
         assert len(str(Passwd)) != 0, "Your Login Password Can Not Be Empty!"
 
+        self.ID = ID
+        self.Passwd = Passwd
+        self.end_point = end_point
+        self.connect_timeout = connect_timeout
+        self.bucket_name = bucket_name
         self.database_name = database_name
         self.last_modify_time = str()
         set_file_logger(file_log, "oss2", INFO)
         set_stream_logger()
-        self.bucket = Bucket(Auth(ID, Passwd), end_point,
-                             connect_timeout=connect_timeout, bucket_name=bucket_name)
+        self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
+                             connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
         self.__init_database()
 
     def __init_database(self) -> bool:
@@ -88,15 +95,23 @@ class AliOSS2:
                 try:
                     query_result = self.cursor.execute(sql_script).fetchall()
                     if len(query_result).__eq__(0):
-                        send_result = self.bucket.put_object_from_file(
-                            file_path, web_saving_path)
-                        if send_result.status == "200":
-                            sql_script = "insert into update_records(name,local_path,web_saving_path,update_time,modified_time,update_flag)" + \
-                                " values('" + file + "','" + local_path + "','" + web_saving_path + "','" + str(time()) + "','" + \
-                                str(modify_time) + "','" + \
-                                self.change_flag + "');"
-                            logger.debug(sql_script)
-                            self.cursor.execute(sql_script)
+                        retry_count = 0
+                        while True:
+                            try:
+                                retry_count += 1
+                                send_result = self.bucket.put_object_from_file(
+                                    file_path, web_saving_path)
+                                if send_result.status == "200":
+                                    sql_script = "insert into update_records(name,local_path,web_saving_path,update_time,modified_time,update_flag)" + \
+                                        " values('" + file + "','" + local_path + "','" + web_saving_path + "','" + str(time()) + "','" + \
+                                        str(modify_time) + "','" + \
+                                        self.change_flag + "');"
+                                    logger.debug(sql_script)
+                                    self.cursor.execute(sql_script)
+                                    break
+                            except Exception:
+                                if retry_count > MAX_RETRIES:
+                                    break
                     elif len(query_result).__eq__(1):
                         if str(query_result[0][0]).__eq__(modify_time):
                             sql_script = "update update_records set update_flag='" + \
@@ -104,16 +119,24 @@ class AliOSS2:
                             logger.debug(sql_script)
                             self.cursor.execute(sql_script)
                         else:
-                            send_result = self.bucket.put_object_from_file(
-                                file_path, web_saving_path)
-                            if send_result.status == "200":
-                                sql_script = "update update_records set update_time='" + \
-                                    str(time()) + "',modified_time='" + \
-                                    str(modify_time) + "',update_flag='" + \
-                                    self.change_flag + \
-                                    "' where name='" + file + "';"
-                                logger.debug(sql_script)
-                                self.cursor.execute(sql_script)
+                            retry_count = 0
+                            while True:
+                                try:
+                                    retry_count += 1
+                                    send_result = self.bucket.put_object_from_file(
+                                        file_path, web_saving_path)
+                                    if send_result.status == "200":
+                                        sql_script = "update update_records set update_time='" + \
+                                            str(time()) + "',modified_time='" + \
+                                            str(modify_time) + "',update_flag='" + \
+                                            self.change_flag + \
+                                            "' where name='" + file + "';"
+                                        logger.debug(sql_script)
+                                        self.cursor.execute(sql_script)
+                                        break
+                                except Exception:
+                                    if retry_count > MAX_RETRIES:
+                                        break
                     else:
                         raise "more than one file have been recorded!"
                 except OperationalError:
@@ -123,14 +146,14 @@ class AliOSS2:
             else:
                 self.__update_file(file_path, web_saving_path)
 
-    def __handle_file(self) -> bool:
+    def __handle_file(self) -> None:
         with open("file_delete.log", "a+") as f:
             sql_script = "select * from update_records where update_flag!='" + \
                 self.change_flag + "';"
             logger.debug(sql_script)
             query_result_list = self.cursor.execute(sql_script).fetchall()
             if len(query_result_list).__eq__(0):
-                return True
+                return
             for file_list in query_result_list:
                 file_name = file_list[1]
                 local_path = file_list[2]
