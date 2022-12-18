@@ -1,7 +1,8 @@
 from sqlite3 import connect, OperationalError
-from oss2 import Auth, Bucket, set_file_logger, set_stream_logger, logger
-from logging import INFO
-from os.path import join, isfile, getmtime, exists
+from oss2 import Auth, Bucket, set_file_logger, set_stream_logger, logger, determine_part_size, SizedFileAdapter
+from oss2.models import PutObjectResult, PartInfo
+from logging import INFO, DEBUG
+from os.path import join, isfile, getmtime, exists, getsize
 from os import listdir
 from time import sleep, time, localtime, asctime
 from random import randint
@@ -17,7 +18,7 @@ class AliOSS2:
                  Passwd,
                  end_point="oss-cn-hongkong.aliyuncs.com",
                  # TODO setting your "bucket_name"
-                 bucket_name="bucket_name",
+                 bucket_name="capme-weboss",
                  file_log="running.log",
                  connect_timeout=30,
                  database_name="records.db",
@@ -32,12 +33,13 @@ class AliOSS2:
         self.bucket_name = bucket_name
         self.database_name = database_name
         self.last_modify_time = str()
-        set_file_logger(file_log, "oss2", INFO)
         if debug_mode:
+            set_file_logger(file_log, "oss2", DEBUG)
             set_stream_logger()
         else:
+            set_file_logger(file_log, "oss2", INFO)
             self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
-                                connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
+                                 connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
         self.__init_database()
 
     def __init_database(self) -> bool:
@@ -88,6 +90,8 @@ class AliOSS2:
         for file in file_list:
             file_path = join(local_path, file)
             web_saving_path = join(web_path, file)
+            if file.startswith('.') and not isfile(file_path):
+                continue
             if isfile(file_path):
                 logger.debug("file path is: %30s \n\t\t\t\t\t\t       web saving path is: %5s" % (
                     file_path, web_saving_path))
@@ -102,21 +106,24 @@ class AliOSS2:
                         while True:
                             try:
                                 retry_count += 1
-                                send_result = self.bucket.put_object_from_file(
-                                    file_path, web_saving_path)
-                                if send_result.status == "200":
+                                # send_result = self.bucket.put_object_from_file(
+                                #     web_saving_path, file_path)
+                                send_result = self.__upload_file_in_detial(
+                                    local_path, web_saving_path)
+                                if send_result.status == 200:
                                     sql_script = "insert into update_records(name,local_path,web_saving_path,update_time,modified_time,update_flag)" + \
-                                        " values('" + file + "','" + local_path + "','" + web_saving_path + "','" + str(time()) + "','" + \
+                                        " values('" + file + "','" + file_path + "','" + web_saving_path + "','" + str(time()) + "','" + \
                                         str(modify_time) + "','" + \
                                         self.change_flag + "');"
                                     logger.debug(sql_script)
                                     self.cursor.execute(sql_script)
                                     break
-                            except Exception:
                                 if retry_count > MAX_RETRIES:
                                     break
+                            except Exception:
+                                break
                     elif len(query_result).__eq__(1):
-                        if str(query_result[0][0]).__eq__(modify_time):
+                        if str(query_result[0][0]).__eq__(str(modify_time)):
                             sql_script = "update update_records set update_flag='" + \
                                 self.change_flag + "' where name='" + file + "';"
                             logger.debug(sql_script)
@@ -126,9 +133,11 @@ class AliOSS2:
                             while True:
                                 try:
                                     retry_count += 1
-                                    send_result = self.bucket.put_object_from_file(
-                                        file_path, web_saving_path)
-                                    if send_result.status == "200":
+                                    # send_result = self.bucket.put_object_from_file(
+                                    #     web_saving_path, file_path)
+                                    send_result = self.__upload_file_in_detial(
+                                        local_path, web_saving_path)
+                                    if send_result.status == 200:
                                         sql_script = "update update_records set update_time='" + \
                                             str(time()) + "',modified_time='" + \
                                             str(modify_time) + "',update_flag='" + \
@@ -137,9 +146,10 @@ class AliOSS2:
                                         logger.debug(sql_script)
                                         self.cursor.execute(sql_script)
                                         break
-                                except Exception:
                                     if retry_count > MAX_RETRIES:
                                         break
+                                except Exception:
+                                    break
                     else:
                         raise "more than one file have been recorded!"
                 except OperationalError:
@@ -166,7 +176,8 @@ class AliOSS2:
                         file_name + "' and local_path='" + local_path + "';"
                     logger.debug(sql_script)
                     self.cursor.execute(sql_script)
-                    log_string = "file_deleted: <%5s> has been deleted!\n" % file_name
+                    log_string = "file_deleted: <%5s, local_location: %10s, web_location: %10s> has been deleted!\n" % (
+                        file_name, local_path, file_list[3])
                     logger.warn(log_string)
                     log_string = date + ">>>" + log_string
                     f.write(log_string)
@@ -175,13 +186,37 @@ class AliOSS2:
                     # TODO reupload file
                     pass
 
+    def __upload_file_in_detial(self, local_path, web_saving_path) -> PutObjectResult:
+        total_file_size = getsize(local_path)
+        spilt_threshold = 1024 * 1024 * 10 * 10  # 100M
+        if total_file_size.__ge__(spilt_threshold):
+            part_size = determine_part_size(
+                total_file_size, preferred_size=spilt_threshold)
+            upload_id = self.bucket.init_multipart_upload(local_path).upload_id
+            parts = []
+            with open(local_path, "rb") as f:
+                part_number = 1
+                offset = 0
+                while offset < total_file_size:
+                    num_to_upload = min(part_size, total_file_size - offset)
+                    result = self.bucket.upload_part(local_path,
+                                                     upload_id,
+                                                     part_number,
+                                                     SizedFileAdapter(f, num_to_upload))
+                    parts.append(PartInfo(part_number, result.etag))
+                    offset += num_to_upload
+                    part_number += 1
+            return self.bucket.complete_multipart_upload(local_path, upload_id, parts)
+        else:
+            return self.bucket.put_object_from_file(web_saving_path, local_path)
+
     def run(self, local_path, web_root_path, database_file_path) -> None:
         if not isfile(database_file_path) and not database_file_path.endswith("db"):
             logger.error(
                 "input database file do not exist or this file is not a database file")
             exit()
         while True:
-            if not getmtime(database_file_path).__eq__(self.last_modify_time):
+            if not str(getmtime(database_file_path)).__eq__(self.last_modify_time):
                 try:
                     self.client = connect(self.database_name)
                     self.cursor = self.client.cursor()
@@ -192,13 +227,15 @@ class AliOSS2:
                     self.cursor.close()
                     self.client.commit()
                     self.client.close()
+                    logger.info("closing the database")
                 logger.info("sleeping for next changing!")
-                self.last_modify_time = getmtime(database_file_path)
+                self.last_modify_time = str(getmtime(database_file_path))
             else:
                 sleep(16)
 
 
 if __name__ == "__main__":
-    alioss2 = AliOSS2("s", "s", debug_mode=True)  # TODO input your ID and Key
-    alioss2.run("/home/rane/project/python/alioss", "/",
-                "test.db")  # TODO change to your folder
+    alioss2 = AliOSS2("", "",
+                      debug_mode=False)  # TODO input your ID and Key
+    alioss2.run("/home/rane/project/github/capme-alioss", "",
+                "test.db")  # TODO change to your folder, web path, and monitor file
