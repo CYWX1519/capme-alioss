@@ -8,6 +8,7 @@ from time import sleep, time, localtime, asctime
 from random import randint
 import uuid
 from traceback import print_exc
+from datetime import date, timedelta
 
 MAX_RETRIES = 3
 
@@ -109,7 +110,7 @@ class AliOSS2:
                                 # send_result = self.bucket.put_object_from_file(
                                 #     web_saving_path, file_path)
                                 send_result = self.__upload_file_in_detial(
-                                    local_path, web_saving_path)
+                                    file_path, web_saving_path)
                                 if send_result.status == 200:
                                     sql_script = "insert into update_records(name,local_path,web_saving_path,update_time,modified_time,update_flag)" + \
                                         " values('" + file + "','" + file_path + "','" + web_saving_path + "','" + str(time()) + "','" + \
@@ -136,7 +137,7 @@ class AliOSS2:
                                     # send_result = self.bucket.put_object_from_file(
                                     #     web_saving_path, file_path)
                                     send_result = self.__upload_file_in_detial(
-                                        local_path, web_saving_path)
+                                        file_path, web_saving_path)
                                     if send_result.status == 200:
                                         sql_script = "update update_records set update_time='" + \
                                             str(time()) + "',modified_time='" + \
@@ -178,7 +179,7 @@ class AliOSS2:
                     self.cursor.execute(sql_script)
                     log_string = "file_deleted: <%5s, local_location: %10s, web_location: %10s> has been deleted!\n" % (
                         file_name, local_path, file_list[3])
-                    logger.warn(log_string)
+                    logger.warning(log_string)
                     log_string = date + ">>>" + log_string
                     f.write(log_string)
                     # TODO move delete file
@@ -215,6 +216,8 @@ class AliOSS2:
             logger.error(
                 "input database file do not exist or this file is not a database file")
             exit()
+        today = date.today()
+        tomorrow = today + timedelta(1)
         while True:
             if not str(getmtime(database_file_path)).__eq__(self.last_modify_time):
                 try:
@@ -232,6 +235,13 @@ class AliOSS2:
                 self.last_modify_time = str(getmtime(database_file_path))
             else:
                 sleep(16)
+            today = date.today()
+            if today.__eq__(tomorrow):
+                sleep(10)
+                self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
+                                 connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
+                tomorrow = today + timedelta(1)
+            
 
 
 if __name__ == "__main__":
