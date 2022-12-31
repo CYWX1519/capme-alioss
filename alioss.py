@@ -73,8 +73,8 @@ class AliOSS2:
             logger.info("creating new table...")
             sql_script = "create table update_records(id integer primary key autoincrement not null,\
                                                       name varchar(255) not null,\
-                                                      local_path varchar(255) not null,\
-                                                      web_saving_path varchar(255) not null,\
+                                                      local_path varchar(512) not null,\
+                                                      web_saving_path varchar(512) not null,\
                                                       update_time varchar(255) not null,\
                                                       modified_time varchar(255) not null,\
                                                       update_flag varchar(20) not null,\
@@ -91,7 +91,7 @@ class AliOSS2:
         for file in file_list:
             file_path = join(local_path, file)
             web_saving_path = join(web_path, file)
-            if file.startswith('.') and not isfile(file_path):
+            if (file.startswith('.') and not isfile(file_path)) or file.__eq__("temp"):
                 continue
             if isfile(file_path):
                 logger.debug("file path is: %30s \n\t\t\t\t\t\t       web saving path is: %5s" % (
@@ -163,7 +163,7 @@ class AliOSS2:
     def __handle_file(self) -> None:
         with open("file_delete.log", "a+") as f:
             sql_script = "select * from update_records where update_flag!='" + \
-                self.change_flag + "';"
+                self.change_flag + "' and deleted_flag=0;"
             logger.debug(sql_script)
             query_result_list = self.cursor.execute(sql_script).fetchall()
             if len(query_result_list).__eq__(0):
@@ -245,7 +245,24 @@ class AliOSS2:
 
 
 if __name__ == "__main__":
-    alioss2 = AliOSS2("", "",
+    content = str()
+    ID = str()
+    passwd = str()
+    local_path=str()
+    web_root_path=str()
+    database_file_path=str()
+    if exists("key"):
+        with open("key", "r") as f:
+            content = f.read()
+
+    if not len(content).__eq__(0):
+        content_list = content.split("\n")
+        ID = content_list[0]
+        passwd = content_list[1]
+        local_path = content_list[2]
+        web_root_path=content_list[3]
+        database_file_path=content_list[4]
+    alioss2 = AliOSS2(ID, passwd,
                       debug_mode=False)  # TODO input your ID and Key
-    alioss2.run("/home/rane/project/github/capme-alioss", "",
-                "test.db")  # TODO change to your folder, web path, and monitor file
+    alioss2.run(local_path, web_root_path,
+                database_file_path)  # TODO change to your folder, web path, and monitor file
