@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from plugs.customer_backup import copy_special_file
 
 MAX_RETRIES = 3
-COPY_AREA_ONE_NANTAO = "/root/nt"
+COPY_AREA_ONE_NT = "/root/nt"
 COPY_AREA_TWO_OSSBAK = "/root/capme-alioss"
 DEST_SAVING_PATH = "/root/alist/upload/admin/softwareDB"
 COPY_FILES_BUFFER = list()
@@ -223,7 +223,7 @@ class AliOSS2:
         COPY_FILES_BUFFER.append("log.txt")
         COPY_FILES_BUFFER.append("savedImages.txt")
         COPY_FILES_BUFFER.append("time.txt")
-        copy_special_file(COPY_AREA_ONE_NANTAO, join(
+        copy_special_file(COPY_AREA_ONE_NT, join(
             DEST_SAVING_PATH, "nt"), logger, DEST_SAVING_PATH, COPY_FILES_BUFFER)
 
         COPY_FILES_BUFFER.clear()
