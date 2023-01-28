@@ -1,4 +1,4 @@
-from os.path import join, isfile, isdir
+from os.path import join, isfile, isdir, exists
 from os import mkdir
 from shutil import copyfile
 from oss2 import logger
@@ -10,7 +10,8 @@ def copy_special_file(source_file_path, dest_file_path, main_logger, dest_saving
     if main_logger:
         logger = main_logger
     logger.info("starting copy special files")
-    logger.debug("source path is: <" + source_file_path + ">\tdestation path is: <" + dest_file_path + ">\tcopying files number is: <" + str(len(file_list)) + ">\n")
+    logger.debug("source path is: <" + source_file_path + ">\tdestation path is: <" +
+                 dest_file_path + ">\tcopying files number is: <" + str(len(file_list)) + ">\n")
     if dest_saving_path:
         if not isdir(dest_saving_path):
             mkdir(dest_saving_path)
@@ -30,7 +31,11 @@ def copy_special_file(source_file_path, dest_file_path, main_logger, dest_saving
             logger.warn(
                 "If you want to using a list of files that will be copied, please input a folder path, not a file path when setting source path")
             return False
-        if not isdir(dest_file_path):
+
+        if not isfile(dest_file_path):
+            if not exists(dest_file_path):
+                mkdir(dest_file_path)
+        else:
             logger.warn(
                 "If you want to using a list of files that will be copied, please input a folder path, not a file path when setting destination path")
             return False

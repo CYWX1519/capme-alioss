@@ -2,7 +2,7 @@ from sqlite3 import connect, OperationalError
 from oss2 import Auth, Bucket, set_file_logger, set_stream_logger, logger, determine_part_size, SizedFileAdapter
 from oss2.models import PutObjectResult, PartInfo
 from logging import INFO, DEBUG
-from os.path import join, isfile, getmtime, exists, getsize, isdir
+from os.path import join, isfile, getmtime, exists, getsize
 from os import listdir
 from time import sleep, time, localtime, asctime
 from random import randint
@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from plugs.customer_backup import copy_special_file
 
 MAX_RETRIES = 3
-COPY_AREA_ONE_NT = "/root/nt"
+COPY_AREA_ONE_NTBAK = "/root/nt"
 COPY_AREA_TWO_OSSBAK = "/root/capme-alioss"
 DEST_SAVING_PATH = "/root/alist/upload/admin/softwareDB"
 COPY_FILES_BUFFER = list()
@@ -223,7 +223,7 @@ class AliOSS2:
         COPY_FILES_BUFFER.append("log.txt")
         COPY_FILES_BUFFER.append("savedImages.txt")
         COPY_FILES_BUFFER.append("time.txt")
-        copy_special_file(COPY_AREA_ONE_NT, join(
+        copy_special_file(COPY_AREA_ONE_NTBAK, join(
             DEST_SAVING_PATH, "nt"), logger, DEST_SAVING_PATH, COPY_FILES_BUFFER)
 
         COPY_FILES_BUFFER.clear()
