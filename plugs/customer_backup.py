@@ -42,12 +42,13 @@ def copy_special_file(source_file_path, dest_file_path, main_logger, dest_saving
         for file in file_list:
             file_source_path = join(source_file_path, file)
             file_dest_path = join(dest_file_path, file)
-            logger.info("current file source path is:" + file_source_path +
+            logger.debug("current file source path is:" + file_source_path +
                         "\t destation file path is:" + file_dest_path + "\n")
             if copyfile(file_source_path, file_dest_path):
-                logger.info("file copy succeed")
+                logger.debug("file copy succeed")
             else:
-                logger.warn("file copy failed")
+                logger.warn("file copy failed at:" + file_source_path + "\n")
+        logger.info("file copy succeed")
 
 
 if __name__ == "__main__":
