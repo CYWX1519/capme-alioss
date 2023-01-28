@@ -2,15 +2,20 @@ from sqlite3 import connect, OperationalError
 from oss2 import Auth, Bucket, set_file_logger, set_stream_logger, logger, determine_part_size, SizedFileAdapter
 from oss2.models import PutObjectResult, PartInfo
 from logging import INFO, DEBUG
-from os.path import join, isfile, getmtime, exists, getsize
+from os.path import join, isfile, getmtime, exists, getsize, isdir
 from os import listdir
 from time import sleep, time, localtime, asctime
 from random import randint
 import uuid
 from traceback import print_exc
 from datetime import date, timedelta
+from plugs.customer_backup import copy_special_file
 
 MAX_RETRIES = 3
+COPY_AREA_ONE_NANTAO = "/root/nt"
+COPY_AREA_TWO_OSSBAK = "/root/capme-alioss"
+DEST_SAVING_PATH = "/root/alist/upload/admin/softwareDB"
+COPY_FILES_BUFFER = list()
 
 
 class AliOSS2:
@@ -211,6 +216,24 @@ class AliOSS2:
         else:
             return self.bucket.put_object_from_file(web_saving_path, local_path)
 
+    def copy_my_special_files(self) -> bool:
+        logger.info("start to backup custom files")
+
+        COPY_FILES_BUFFER.clear()
+        COPY_FILES_BUFFER.append("log.txt")
+        COPY_FILES_BUFFER.append("savedImages.txt")
+        COPY_FILES_BUFFER.append("time.txt")
+        copy_special_file(COPY_AREA_ONE_NANTAO, join(
+            DEST_SAVING_PATH, "nt"), logger, DEST_SAVING_PATH, COPY_FILES_BUFFER)
+
+        COPY_FILES_BUFFER.clear()
+        COPY_FILES_BUFFER.append("key")
+        COPY_FILES_BUFFER.append("records.db")
+        COPY_FILES_BUFFER.append("running.log")
+        COPY_FILES_BUFFER.append("file_delete.log")
+        copy_special_file(COPY_AREA_TWO_OSSBAK, join(
+            DEST_SAVING_PATH, "weboss"), logger, DEST_SAVING_PATH, COPY_FILES_BUFFER)
+
     def run(self, local_path, web_root_path, database_file_path) -> None:
         if not isfile(database_file_path) and not database_file_path.endswith("db"):
             logger.error(
@@ -237,20 +260,20 @@ class AliOSS2:
                 sleep(16)
             today = date.today()
             if today.__eq__(tomorrow):
+                self.copy_my_special_files()
                 sleep(10)
                 self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
-                                 connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
+                                     connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
                 tomorrow = today + timedelta(1)
-            
 
 
 if __name__ == "__main__":
     content = str()
     ID = str()
     passwd = str()
-    local_path=str()
-    web_root_path=str()
-    database_file_path=str()
+    local_path = str()
+    web_root_path = str()
+    database_file_path = str()
     if exists("key"):
         with open("key", "r") as f:
             content = f.read()
@@ -260,8 +283,8 @@ if __name__ == "__main__":
         ID = content_list[0]
         passwd = content_list[1]
         local_path = content_list[2]
-        web_root_path=content_list[3]
-        database_file_path=content_list[4]
+        web_root_path = content_list[3]
+        database_file_path = content_list[4]
     alioss2 = AliOSS2(ID, passwd,
                       debug_mode=False)  # TODO input your ID and Key
     alioss2.run(local_path, web_root_path,

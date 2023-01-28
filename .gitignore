@@ -3,3 +3,4 @@ key*
 *.log
 *.sql
 .vscode/
+*/__pycache__/
