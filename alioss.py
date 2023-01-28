@@ -260,8 +260,8 @@ class AliOSS2:
                 sleep(16)
             today = date.today()
             if today.__eq__(tomorrow):
+                sleep(15)
                 self.copy_my_special_files()
-                sleep(10)
                 self.bucket = Bucket(Auth(self.ID, self.Passwd), self.end_point,
                                      connect_timeout=self.connect_timeout, bucket_name=self.bucket_name)
                 tomorrow = today + timedelta(1)
