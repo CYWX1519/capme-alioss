@@ -9,6 +9,8 @@ DEST_SAVING_PATH = "/root/alist/upload/admin/softwareDB"
 def copy_special_file(source_file_path, dest_file_path, main_logger, dest_saving_path=None, file_list=list()) -> bool:
     if main_logger:
         logger = main_logger
+    else:
+        assert main_logger==None, "logger operator can not be None!"
     logger.info("starting copy special files")
     logger.debug("source path is: <" + source_file_path + ">\tdestation path is: <" +
                  dest_file_path + ">\tcopying files number is: <" + str(len(file_list)) + ">\n")
